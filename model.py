@@ -37,9 +37,13 @@ class QModel:
 
     #compiles the model, which needs to be done both on init and on load
     def _compile(self):
+        """
         self.model.compile(optimizer=tf.train.AdamOptimizer(self.alpha),
                 loss='mse',
                 metrics=['mae'])
+        """
+        self.model.compile(optimizer=tf.train.AdamOptimizer(self.alpha),
+                loss='logcosh')
 
     #uses the model to get the predicted label for the piece of data
     def getValue(self, data):
