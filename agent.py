@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
+import sys
 import copy
 import random
 from model import QModel
 
 discount = 0.99
-epsilon = 0.3
+epsilon = 0.5
 
 #manages consecutive states for a given model
 #this requires that updateState() will be called before getAction() for a particular turn
@@ -81,11 +82,19 @@ def playWithUser(Game, model):
                 actionString = game.actionToString(actions[i])
                 print(str(i+1) + ':', actionString)
             #perform user's action
-            i = int(input("Your Move:"))-1
+            valid = False
+            while not valid:
+                userStr = input("Your Move:")
+                try:
+                    i = int(userStr)-1
+                    if i > 0 and i < len(actions):
+                        valid = True
+                except:
+                    print('invalid input')
             result = game.takeTurn(actions[i])
         else:
             #get the action from the model and perform it
-            action = getAction(model, game)
+            action = getAction(model, game, verbose=True)
             result = game.takeTurn(action)
 
         if result:
@@ -93,6 +102,31 @@ def playWithUser(Game, model):
             print()
             print("winner:", result)
             return game
+
+def testAgainstRandom(Game, model, n=100):
+    game = Game()
+    wins = 0
+    losses = 0
+    ties = 0
+    for i in range(n):
+        modelTurn = 1 if random.random() > 0.5 else 2
+        result = None
+        while result == None:
+            if game.turn == modelTurn:
+                action = getAction(model, game)
+                result = game.takeTurn(action)
+            else:
+                actions = game.getActions()
+                action = random.choice(actions)
+                result = game.takeTurn(action)
+        if result == -1:
+            ties += 1
+        elif result == modelTurn:
+            wins += 1
+        else:
+            losses += 1
+    return (wins, losses, ties)
+
 
 #gets the best action for the given state according to the given model
 def getBestAction(model, state, verbose=False):
@@ -110,9 +144,10 @@ def getBestAction(model, state, verbose=False):
 
     #find the highest value action
     for i in range(len(actionValues)):
-        if(verbose):
-            print('input', actions[i])
+        if verbose:
+            print('input', state.actionToString(actions[i]))
             print('value', actionValues[i])
+
         if bestAction == None or actionValues[i] > bestValue:
             bestValue = actionValues[i]
             bestAction = actions[i]
@@ -179,7 +214,7 @@ def getStateValue(model, state, sort_model=None):
 #num samples is the number of samples used to train in a training session
 #target clone steps is how many steps before the target network is cloned from the main network
 #saveDir should not have a trailing / (unless you're using the filesystem root)
-def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epochs=0, sample_size=100, target_clone_steps=5, num_samples=100, saveDir='.', loadModels=False):
+def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epochs=0, sample_size=100, target_clone_steps=3, num_samples=100, saveDir='.', loadModels=False, play_at_end=False):
     #init models
     models = []
     targetModels = []
@@ -191,7 +226,7 @@ def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epoc
             try:
                 model.loadModel(filename)
             except:
-                print('failed to load', filename)
+                print('failed to load', filename, file=sys.stderr)
         models.append(model)
         targetModels.append(model.clone())
         modelTuples.append([])
@@ -203,21 +238,29 @@ def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epoc
         oldEpsilon = epsilon
         epsilon = 0
         game = playGame(Game(), models[0], models[-1], [], [], verbose=True)
-        print('-----------------')
+        print('-----------------', file=sys.stderr)
         epsilon = oldEpsilon
 
-    #save epsilon so we can have a few random epochs
-    nonRandomEpsilon = epsilon
-    epsilon = 1
+    if random_epochs > 0:
+        #save epsilon so we can have a few random epochs
+        nonRandomEpsilon = epsilon
+        epsilon = 1
 
     for i in range(num_epochs):
         #show a sample game each epoch
+        """
         oldEpsilon = epsilon
         epsilon = 0
         game = playGame(Game(), models[0], models[-1], [], [], verbose=True)
-        print('-----------------')
+        print('-----------------', file=sys.stderr)
         epsilon = oldEpsilon
-        print(i)
+        """
+        oldEpsilon = epsilon
+        epsilon = 0
+        wins, losses, ties = testAgainstRandom(Game, models[0])
+        print(i, wins, losses, ties, sep=',')
+        epsilon = oldEpsilon
+        print(i, file=sys.stderr)
 
         #restore epsilon after the random epochs are over
         if i == random_epochs:
@@ -231,7 +274,7 @@ def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epoc
                 modelTuples[j] = []
 
         #epoch
-        print('playing')
+        print('playing', file=sys.stderr)
         for j in range(epoch_size):
             #this way of sampling means that every model plays every model once
             #before playing the same model again (assuming n*n divides epoch_size)
@@ -242,7 +285,7 @@ def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epoc
         #train each model on the model tuples
         #see this for many of the ideas used
         #http://rail.eecs.berkeley.edu/deeprlcourse/static/slides/lec-8.pdf
-        print('training')
+        print('training', file=sys.stderr)
         for j in range(len(models)):
             #model that will be modified
             model = models[j]
@@ -267,8 +310,9 @@ def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epoc
             filename = saveDir + '/' + 'model-' + name + str(j) + '.h5'
             models[j].saveModel(filename)
 
-    #after training is done, let the user try out one of the models
-    playWithUser(Game, models[0])
+    if play_at_end:
+        #after training is done, let the user try out one of the models
+        playWithUser(Game, models[0])
 
 if __name__ == "__main__":
     train(TicTacToe, num_models=3, num_epochs=20)
