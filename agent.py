@@ -87,7 +87,7 @@ def playWithUser(Game, model):
                 userStr = input("Your Move:")
                 try:
                     i = int(userStr)-1
-                    if i > 0 and i < len(actions):
+                    if i >= 0 and i < len(actions):
                         valid = True
                 except:
                     print('invalid input')
@@ -104,11 +104,11 @@ def playWithUser(Game, model):
             return game
 
 def testAgainstRandom(Game, model, n=100):
-    game = Game()
     wins = 0
     losses = 0
     ties = 0
     for i in range(n):
+        game = Game()
         modelTurn = 1 if random.random() > 0.5 else 2
         result = None
         while result == None:
@@ -207,14 +207,20 @@ def getStateValue(model, state, sort_model=None):
 
 #makes/loads some models and trains them according to the parameters
 #then lets the user play one of the models
+#*_steps: map from epoch # to what the alpha/discount/epsilon should be set to at the point
 #epoch size is the number of games played between training sessions
 #num epochs is the number of epochs before finishing
-#random epochs is the number of initial epochs where epsilon = 1 i.e. complete random
+#random epochs is deprecated
 #sample size is the number of tuples evaluated at a time in a training session
 #num samples is the number of samples used to train in a training session
 #target clone steps is how many steps before the target network is cloned from the main network
 #saveDir should not have a trailing / (unless you're using the filesystem root)
-def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epochs=0, sample_size=100, target_clone_steps=3, num_samples=100, saveDir='.', loadModels=False, play_at_end=False):
+def train(Game, name, num_models=3,
+        alpha_steps={0: 0.001}, discount_steps={0: 0.99}, epsilon_steps={0: 0.5},
+        epoch_size=1000, num_epochs=200, random_epochs=0,
+        sample_size=100, target_clone_steps=3, num_samples=100,
+        saveDir='.', loadModels=False,
+        play_at_end=False):
     #init models
     models = []
     targetModels = []
@@ -232,6 +238,7 @@ def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epoc
         modelTuples.append([])
 
     global epsilon
+    global discount
 
     if num_epochs == 0:
         #just show a sample game, don't do any training
@@ -240,11 +247,6 @@ def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epoc
         game = playGame(Game(), models[0], models[-1], [], [], verbose=True)
         print('-----------------', file=sys.stderr)
         epsilon = oldEpsilon
-
-    if random_epochs > 0:
-        #save epsilon so we can have a few random epochs
-        nonRandomEpsilon = epsilon
-        epsilon = 1
 
     for i in range(num_epochs):
         #show a sample game each epoch
@@ -262,9 +264,17 @@ def train(Game, name, num_models=3, epoch_size=1000, num_epochs=200, random_epoc
         epsilon = oldEpsilon
         print(i, file=sys.stderr)
 
-        #restore epsilon after the random epochs are over
-        if i == random_epochs:
-            epsilon = nonRandomEpsilon
+        #adjust parameters if scheduled
+        if i in alpha_steps:
+            alpha = alpha_steps[i]
+            for model in models:
+                model.setAlpha(alpha)
+
+        if i in discount_steps:
+            discount = discount_steps[i]
+
+        if i in epsilon_steps:
+            epsilon = epsilon_steps[i]
 
         #every so often, update the target models and clear out the stored tuples
         #these don't have to happen at the same time, but this is convenient

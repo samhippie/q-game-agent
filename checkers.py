@@ -6,7 +6,7 @@ import random
 from game import Game
 
 #TODO do something more elegant than a top-level constant
-SIZE = 6
+SIZE = 4
 
 class Checkers(Game):
     #state: 5 bits per (valid) board square in state

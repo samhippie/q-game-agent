@@ -45,6 +45,11 @@ class QModel:
         self.model.compile(optimizer=tf.train.AdamOptimizer(self.alpha),
                 loss='logcosh')
 
+    #updates alpha for the model, recompiling if necessary
+    def setAlpha(self, alpha):
+        self.alpha = alpha
+        self._compile()
+
     #uses the model to get the predicted label for the piece of data
     def getValue(self, data):
         return self.model.predict(np.array([data]))[0][0]
