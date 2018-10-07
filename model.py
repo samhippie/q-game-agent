@@ -78,7 +78,7 @@ class QModel:
 
     #saves the model to the file name (which might include path)
     def saveModel(self, name):
-        self.model.save(name)
+        self.model.save(name, include_optimizer=False)
 
     #loads the model from the file name (which might include path)
     def loadModel(self, name):
