@@ -34,10 +34,11 @@ if __name__ == '__main__':
             random_epochs=10,
             saveDir='/home/sam/scratch/tflow', loadModels=True)
     """
-    train(TicTacToe, 'tictactoe-large',
-            alpha_steps={0: 0.1, 10: 0.01, 100: 0.001},
-            discount_steps={0:0.5, 10: 0.7, 50: 0.9, 100: 0.99},
-            epsilon_steps={0: 1, 5: 0.7, 10: 0.5, 50: 0.3},
+    train(TicTacToe, 'tictactoe-small',
+            model_width=64,
+            alpha_steps={0: 0.1, 10: 0.01, 30: 0.001},
+            discount_steps={0:0.5, 10: 0.7, 20: 0.9, 30: 0.99},
+            epsilon_steps={0: 1, 5: 0.7, 10: 0.5, 30: 0.3},
             num_models=1,
             epoch_size=1000, num_epochs=1000,
             sample_size=100, num_samples=100,

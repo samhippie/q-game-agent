@@ -215,7 +215,7 @@ def getStateValue(model, state, sort_model=None):
 #num samples is the number of samples used to train in a training session
 #target clone steps is how many steps before the target network is cloned from the main network
 #saveDir should not have a trailing / (unless you're using the filesystem root)
-def train(Game, name, num_models=3,
+def train(Game, name, num_models=3, model_width=256,
         alpha_steps={0: 0.001}, discount_steps={0: 0.99}, epsilon_steps={0: 0.5},
         epoch_size=1000, num_epochs=200, random_epochs=0,
         sample_size=100, target_clone_steps=3, num_samples=100,
@@ -226,7 +226,7 @@ def train(Game, name, num_models=3,
     targetModels = []
     modelTuples = []
     for i in range(num_models):
-        model = QModel(input_shape=Game.input_shape, alpha=0.001)
+        model = QModel(input_shape=Game.input_shape, alpha=0.001, width=model_width)
         if loadModels:
             filename = saveDir + '/' + 'model-' + name + str(i) + '.h5'
             try:

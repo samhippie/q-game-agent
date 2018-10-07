@@ -5,7 +5,7 @@ from tensorflow import keras
 import numpy as np
 
 class QModel:
-    def __init__(self, input_shape, alpha=0.001, model=None):
+    def __init__(self, input_shape, alpha=0.001, model=None, width=256):
         self.alpha = alpha
         #needs to be saved so we can clone
         self.input_shape = input_shape
@@ -13,15 +13,15 @@ class QModel:
             """
             #simple feedforward
             inputs = keras.Input(input_shape)
-            x = keras.layers.Dense(256, activation='relu')(inputs)
-            y = keras.layers.Dense(256, activation='relu')(x)
+            x = keras.layers.Dense(width, activation='relu')(inputs)
+            y = keras.layers.Dense(width, activation='relu')(x)
             predictions = keras.layers.Dense(1)(y)
             self.model = keras.Model(inputs=inputs, outputs=predictions)
             """
             #fully connected
             inputs = keras.Input(input_shape)
-            x = keras.layers.Dense(256, activation='relu')(inputs)
-            x = keras.layers.Dense(256, activation='relu')(x)
+            x = keras.layers.Dense(width, activation='relu')(inputs)
+            x = keras.layers.Dense(width, activation='relu')(x)
             predictions = keras.layers.Dense(1)(x)
             self.model = keras.Model(inputs=inputs, outputs=predictions)
 
