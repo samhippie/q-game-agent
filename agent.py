@@ -260,21 +260,24 @@ def train(Game, name, num_models=3, model_width=256,
         oldEpsilon = epsilon
         epsilon = 0
         wins, losses, ties = testAgainstRandom(Game, models[0])
-        print(i, wins, losses, ties, sep=',')
+        print(i, wins, losses, ties, sep=',', flush=True)
         epsilon = oldEpsilon
         print(i, file=sys.stderr)
 
         #adjust parameters if scheduled
         if i in alpha_steps:
             alpha = alpha_steps[i]
+            print('alpha is now', alpha, file=sys.stderr)
             for model in models:
                 model.setAlpha(alpha)
 
         if i in discount_steps:
             discount = discount_steps[i]
+            print('discount is now', discount, file=sys.stderr)
 
         if i in epsilon_steps:
             epsilon = epsilon_steps[i]
+            print('epsilon is now', epsilon, file=sys.stderr)
 
         #every so often, update the target models and clear out the stored tuples
         #these don't have to happen at the same time, but this is convenient
