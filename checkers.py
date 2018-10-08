@@ -61,9 +61,9 @@ class Checkers(Game):
         pieceMap = {
             0 : numToOneHot(0, 5),
             1 : numToOneHot(1, 5) if self.turn == 1 else numToOneHot(2, 5),
-            2 : numToOneHot(2, 5) if self.turn == 2 else numToOneHot(1, 5),
+            2 : numToOneHot(2, 5) if self.turn == 1 else numToOneHot(1, 5),
             3 : numToOneHot(3, 5) if self.turn == 1 else numToOneHot(4, 5),
-            4 : numToOneHot(4, 5) if self.turn == 2 else numToOneHot(3, 5),
+            4 : numToOneHot(4, 5) if self.turn == 1 else numToOneHot(3, 5),
         }
         """
         #one-hot with a bit added for kinged pieces
