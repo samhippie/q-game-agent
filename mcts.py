@@ -6,6 +6,7 @@
 import copy
 import random
 import math
+import sys
 import collections
 from tictactoe import TicTacToe
 from checkers import Checkers
@@ -141,6 +142,7 @@ class SearchState:
 
     def addVisit(self, state, action):
         self.stateVisitCount[state] += 1
+        self.visitCount[(state, action)] += 1
         self.pendingHistory.append((state, action))
 
     #whether a particular state has been seen before
@@ -153,8 +155,8 @@ class SearchState:
         self.stateVisitCount[leafState] += 1
         #updated Q for each visit
         for state, action in self.pendingHistory:
-            visits = self.N(state, action) + 1
-            self.visitCount[(state, action)] = visits
+            visits = self.N(state, action)# + 1
+            #self.visitCount[(state, action)] = visits
             if visits == 1:
                 #Q value is average of 1
                 self.qTable[(state, action)] = self.V(leafState)
@@ -203,9 +205,15 @@ def montecarloSearchNN(model, game, searchState, limit=100,
         total += count
         counts.append(count)
 
-    #if no state is ever visited, then we're in some weird corner case
-    #just make each action uniform
+    #total may be 0 depending on how SearchState is set up
+    #if visit counts are updated after finding a leaf, then it can happen
+    #that's not the case now, but I'm leaving the code here anyway
     if total == 0:
+        print('weird corner case')
+        print(counts)
+        game.printBoard()
+        for action in actions:
+            print(game.actionToString(action))
         total = len(actions)
         counts = [1] * len(actions)
 
@@ -311,8 +319,7 @@ def playWithUser(Game, probTable=collections.defaultdict(lambda:(0,0))):
     print()
     print("winner:", result)
 
-def playTrainingGame(Game, model):
-
+def playTrainingGame(Game, model, verbose=False):
     game = Game()
     searchState = SearchState(model, game)
     result = None
@@ -323,28 +330,29 @@ def playTrainingGame(Game, model):
         player = game.turn
         (probVector, value) = montecarloSearchNN(model, game, searchState, limit=1000, temperature=1)
         actions = game.getActions()
-        for i in range(len(probVector)):
-            if probVector[i] != 0:
-                print(i)
-                print('action', game.actionToString(game.denumAction(i)))
-                print('prob', probVector[i])
-        print(probVector)
         a = np.random.choice(len(probVector), p=probVector)
-        game.printBoard()
-        print('a', a)
-        print('a ->', game.actionToString(game.denumAction(int(a))))
+        if verbose:
+            print('--------')
+            game.printBoard(file=sys.stderr)
+            for i in range(len(probVector)):
+                if probVector[i] != 0:
+                    print('action', game.actionToString(game.denumAction(i)), file=sys.stderr)
+                    print('has probability', probVector[i], file=sys.stderr)
+            print('expected value of state', value)
+            print('playing', game.actionToString(game.denumAction(int(a))), file=sys.stderr)
         for action in actions:
             if game.enumAction(action) == a:
                 result = game.takeTurn(action)
                 break
         else:
             print('INVALID ACTION MADE IT THROUGH THE SEARCH')
-            quit(-1)
+            quit(1)
         history.append((game.getData(), player, probVector))
 
-    game.printBoard()
+    if verbose:
+        game.printBoard(file=sys.stderr)
+        print('result', result, file=sys.stderr)
 
-    print('result', result)
     #game is over, give the data to the models
     for state, player, prob in history:
         if result == -1:
@@ -404,20 +412,22 @@ def playWithUserNN(Game, model):
     print("winner:", result)
 
 def train(Game, epoch_size=1000, num_epochs=200):
+    #relatively high alpha for quick testing
     model = MModel(input_shape=Game.mcts_input_shape,
             num_actions=Game.num_actions,
-            width=256)
+            width=256,
+            alpha=0.01)
 
     for i in range(num_epochs):
-        print(i)
+        print('epoch', i)
         for j in range(epoch_size):
-            playTrainingGame(Game, model)
+            playTrainingGame(Game, model, verbose = j == 0)
 
-        model.batchUpdate()
+        model.batchedUpdate(epochs=10)
 
     playWithUserNN(Game, model)
 
 
 
 if __name__ == '__main__':
-    train(Checkers, epoch_size=10, num_epochs=100)
+    train(TicTacToe, epoch_size=10, num_epochs=100)
