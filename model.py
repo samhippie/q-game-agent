@@ -4,6 +4,116 @@ import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 
+#model made for MCTS estimation
+#Qtable functions have just been commented out
+#I'll uncomment and port as needed
+class MModel:
+    def __init__(self, input_shape, num_actions, alpha=0.001, model=None, width=256):
+        self.alpha = alpha
+        #needs to be saved so we can clone
+        self.input_shape = input_shape
+        self.num_actions = num_actions
+        if model == None:
+            #simple feedforward
+            inputs = keras.Input(input_shape)
+            x = keras.layers.Dense(width, activation='relu')(inputs)
+            y = keras.layers.Dense(width, activation='relu')(x)
+            probabilityPrediction = keras.layers.Dense(num_actions,
+                    activation='softmax', name='prob')(y)
+            valuePrediction = keras.layers.Dense(1,
+                    activation='tanh', name='value')(y)
+            self.model = keras.Model(inputs=inputs,
+                    outputs=[probabilityPrediction, valuePrediction])
+            """
+            #fully connected
+            inputs = keras.Input(input_shape)
+            x = keras.layers.Dense(width, activation='relu')(inputs)
+            x = keras.layers.Dense(width, activation='relu')(x)
+            probabilityPrediction = keras.layers.Dense(num_actions,
+                    activation='softmax')(y)
+            valuePrediction = keras.layers.Dense(1,
+                    activation='tanh', name='value')(y)
+            self.model = keras.Model(inputs=inputs,
+                    outputs=[probabilityPrediction, valuePrediction])
+            """
+
+            self._compile()
+
+        else:
+            self.model = model
+
+        #used for batched training
+        self.savedData = []
+        self.savedProb = []
+        self.savedValue = []
+
+
+    #compiles the model, which needs to be done both on init and on load
+    def _compile(self):
+        #have two separate outputs, which use separate errors
+        lossMap = {'prob': 'categorical_crossentropy',
+                'value': 'mse'}
+        self.model.compile(optimizer=tf.train.AdamOptimizer(self.alpha),
+                loss=lossMap)
+
+    #updates alpha for the model, recompiling if necessary
+    def setAlpha(self, alpha):
+        self.alpha = alpha
+        self._compile()
+
+    #uses the model to get the predicted label for the piece of data
+    def getValue(self, data):
+        output = self.model.predict(np.array([data]))
+        prediction = {
+            'prob': output[0][0],
+            'value': output[1][0],
+        }
+        return prediction
+
+    #like getValue(), except data is an array
+    #returns the corresponding output array
+    #def getValues(self, data):
+        #output only has one value
+        #return [v[0] for v in self.model.predict(np.array(data))]
+
+    #saves the data-label for a later batched update
+    def addDataLabel(self, data, prob, value):
+        self.savedData.append(data)
+        self.savedProb.append(prob)
+        self.savedValue.append(value)
+
+    #updates the model to try to fit the data point
+    #def updateTable(self, data, label):
+        #self.model.fit(np.array([data]), np.array([label]), verbose=0)
+
+    def batchedUpdate(self, epochs=1, batch_size=None):
+        if len(self.savedData) > 0:
+            labels = {'prob': np.array(self.savedProb),
+                    'value': np.array(self.savedValue)}
+            self.model.fit(np.array(self.savedData), labels, verbose=0,
+                    epochs=epochs, batch_size=batch_size)
+            self.savedData = []
+            self.savedProb = []
+            self.savedValue = []
+
+    #saves the model to the file name (which might include path)
+    def saveModel(self, name):
+        self.model.save(name, include_optimizer=False)
+
+    #loads the model from the file name (which might include path)
+    def loadModel(self, name):
+        self.model = keras.models.load_model(name)
+        self._compile()
+
+    #returns another instance of QModel with a clone of the current model
+    #this should be a deep copy
+    def clone(self):
+        return QModel(input_shape=self.input_shape,
+                model=keras.models.clone_model(self.model),
+                alpha=self.alpha)
+
+
+
 class QModel:
     def __init__(self, input_shape, alpha=0.001, model=None, width=256):
         self.alpha = alpha

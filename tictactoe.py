@@ -3,7 +3,7 @@ from game import Game
 import sys
 
 class TicTacToe(Game):
-    input_shape = (36,)
+    input_shape = (2 + 36,)
     def __init__(self):
         self.board = [0] * 9
         self.turn = 1
@@ -17,7 +17,9 @@ class TicTacToe(Game):
             1: [0,1,0] if self.turn == 1 else [0,0,1],
             2: [0,0,1] if self.turn == 1 else [0,1,0],
         }
-        return [d for ds in [pieceMap[i] for i in self.board] for d in ds]
+        pieces = [d for ds in [pieceMap[i] for i in self.board] for d in ds]
+        player = [1,0] if self.turn == 1 else [0,1]
+        return player + pieces
 
     #returns 1 or 2 if 1 or 2 won, else None
     #also bumps up turn

@@ -7,7 +7,7 @@ import sys
 from game import Game
 
 #TODO do something more elegant than a top-level constant
-SIZE = 6
+SIZE = 4
 
 class Checkers(Game):
     #state: 5 bits per (valid) board square in state
@@ -20,6 +20,15 @@ class Checkers(Game):
 
     #two bits, one for player 1, other for player 2
     input_shape = ((5 * SIZE * SIZE)/2 + 2 * SIZE * SIZE + 8 + 2,)
+
+    #mcts only uses state for input
+    #basically, same as above minus the move
+    mcts_input_shape = ((5 * SIZE * SIZE) / 2 + 8 + 2,)
+
+    #total number of possible actions
+    #pass, forfeit
+    #or a move with a dst, a direction (1 of 4), and whether it's a jump
+    num_actions = 2 + SIZE * SIZE * 4 * 2
 
     def __init__(self, size=8):
         #8x8, [0] is 1a, dark
@@ -308,6 +317,70 @@ class Checkers(Game):
         dstLabel = chr(ord('a') + dstC) + str(dstR + 1)
         return srcLabel + ' -> ' + dstLabel
 
+    #converts a nonnegative interger to an action
+    def denumAction(self, n):
+        #0 is forfeit
+        if n == 0:
+            return [0] * 2 * SIZE * SIZE
+        #1 is pass
+        if n == 1:
+            return [1] * 2 * SIZE * SIZE
+        n -= 2
+        #whether it's a jump
+        isJump = n % 2
+        n //= 2
+        #the direction of the move
+        dir = n % 4
+        n //= 4
+        #the source of the move
+        src = n
+        srcR = src // SIZE
+        srcC = src % SIZE
+        #find the dst based on the distance and direction
+        diff = [(1,1), (1,-1), (-1,1), (-1,-1)][dir]
+        dist = 2 if isJump else 1
+        diffR = dist*diff[0]
+        diffC = dist*diff[1]
+        dst = (srcR + diffR) * SIZE + (srcC + diffC)
+
+        return numToOneHot(src, SIZE*SIZE) + numToOneHot(dst, SIZE*SIZE)
+
+    def enumAction(self, action):
+        if not 1 in action:
+            return 0
+        elif action[0] == 1 and action[1] == 1:
+            return 1
+        src = oneHotToNum(action[0 : SIZE*SIZE])
+        dst = oneHotToNum(action[SIZE*SIZE : 2*SIZE*SIZE])
+
+        srcR = src // SIZE
+        srcC = src % SIZE
+        dstR = dst // SIZE
+        dstC = dst % SIZE
+
+        diff = [dstR - srcR, dstC - srcC]
+
+        isJump = 0
+        if abs(diff[0]) == 2:
+            isJump = 1
+            diff[0],diff[1] = diff[0] // 2, diff[1] // 2
+
+        if [1,1] == diff:
+            dir = 0
+        elif [1,-1] == diff:
+            dir = 1
+        elif [-1,1] == diff:
+            dir = 2
+        elif [-1,-1] == diff:
+            dir = 3
+
+        #src for the source, * 4 + dir for the direction,
+        #*2 + 1 for whether it's a jump,
+        #offset by 2 for passing and forfiet
+        return (src * 4 + dir) * 2 + isJump + 2
+
+
+
 #converts a number to a one-hot representation
 def numToOneHot(num, size):
     xs = [0] * size
@@ -332,7 +405,11 @@ def numToBinary(num, size):
 
 if __name__ == '__main__':
     c = Checkers()
-    c.turn = 1
-    c.printBoard()
-    for a in c.getActions():
-        print(c.actionToString(a))
+    for action in c.getActions():
+        print(action)
+        print(c.actionToString(action))
+        num = c.enumAction(action)
+        print(num)
+        print(c.denumAction(num))
+        print(c.actionToString(c.denumAction(num)))
+        print('------')
