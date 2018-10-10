@@ -10,7 +10,6 @@ class QModel:
         #needs to be saved so we can clone
         self.input_shape = input_shape
         if model == None:
-            """
             #simple feedforward
             inputs = keras.Input(input_shape)
             x = keras.layers.Dense(width, activation='relu')(inputs)
@@ -24,6 +23,7 @@ class QModel:
             x = keras.layers.Dense(width, activation='relu')(x)
             predictions = keras.layers.Dense(1)(x)
             self.model = keras.Model(inputs=inputs, outputs=predictions)
+            """
 
             self._compile()
 

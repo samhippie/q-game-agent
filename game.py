@@ -8,7 +8,7 @@ class Game:
     def takeTurn(self, action):
         raise Error('take turn not implemented')
 
-    def printBoard(self):
+    def printBoard(self, file):
         raise Error('print board not implemented')
 
     #gets the legal actions for the current turn

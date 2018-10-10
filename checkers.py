@@ -2,11 +2,12 @@
 
 import collections
 import random
+import sys
 
 from game import Game
 
 #TODO do something more elegant than a top-level constant
-SIZE = 4
+SIZE = 6
 
 class Checkers(Game):
     #state: 5 bits per (valid) board square in state
@@ -16,7 +17,9 @@ class Checkers(Game):
 
     #counter: and we have 8 bits to count the number of turns
     #after 256 turns, the game ends in a tie
-    input_shape = ((5 * SIZE * SIZE)/2 + 2 * SIZE * SIZE + 8,)
+
+    #two bits, one for player 1, other for player 2
+    input_shape = ((5 * SIZE * SIZE)/2 + 2 * SIZE * SIZE + 8 + 2,)
 
     def __init__(self, size=8):
         #8x8, [0] is 1a, dark
@@ -60,23 +63,13 @@ class Checkers(Game):
         #one hot representation
         pieceMap = {
             0 : numToOneHot(0, 5),
-            1 : numToOneHot(1, 5) if self.turn == 1 else numToOneHot(2, 5),
-            2 : numToOneHot(2, 5) if self.turn == 1 else numToOneHot(1, 5),
-            3 : numToOneHot(3, 5) if self.turn == 1 else numToOneHot(4, 5),
-            4 : numToOneHot(4, 5) if self.turn == 1 else numToOneHot(3, 5),
+            1 : numToOneHot(1, 5),# if self.turn == 1 else numToOneHot(2, 5),
+            2 : numToOneHot(2, 5),# if self.turn == 1 else numToOneHot(1, 5),
+            3 : numToOneHot(3, 5),# if self.turn == 1 else numToOneHot(4, 5),
+            4 : numToOneHot(4, 5),# if self.turn == 1 else numToOneHot(3, 5),
         }
-        """
-        #one-hot with a bit added for kinged pieces
-        pieceMap = {
-            0 : [1,0,0,0],
-            1 : [0,1,0,0] if self.turn == 1 else [0,0,1,0],
-            2 : [0,0,1,0] if self.turn == 2 else [0,1,0,0],
-            3 : [0,1,0,1] if self.turn == 1 else [0,0,1,1],
-            4 : [0,0,1,1] if self.turn == 2 else [0,1,0,1],
-        }
-        """
         #iterate over each piece in order, (reverse order for player 2)
-        indices = range(SIZE*SIZE) if self.turn == 1 else range(SIZE*SIZE-1, -1, -1)
+        indices = range(SIZE*SIZE)# if self.turn == 1 else range(SIZE*SIZE-1, -1, -1)
         for i in indices:
             r = i // SIZE
             c = i % SIZE
@@ -85,13 +78,17 @@ class Checkers(Game):
 
         #the number of turns remaining
         #should this be one-hot?
-        squares = squares + numToBinary(self.turnCount, 8)
+        #this really only needs to be low resolution, and binary is basically unary at a low enough resoution
+        squares += numToBinary(self.turnCount, 8)
+
+        #current turn (i.e. are the associated actions for black or red?)
+        squares += numToOneHot(self.turn - 1, 2)
 
         return squares
 
     #shows black as 1, red as 2, black king as !, red king as &
     #on a board with chess-style notations
-    def printBoard(self):
+    def printBoard(self, file=sys.stdout):
         pieceMap = {
             0: '_',
             1: '1',
@@ -100,28 +97,29 @@ class Checkers(Game):
             4: '&',
         }
         #turn counter
-        print('turns remaining:', self.turnCount)
+        print('turns remaining:', self.turnCount, file=file)
+        print('player', self.turn, 'to move', file=file)
         #top label
         cols = [chr(ord('a') + c) for c in range(SIZE)]
-        print('  ', end='')
+        print('  ', end='', file=file)
         for c in cols:
-            print(c + ' ', end='')
-        print()
+            print(c + ' ', end='', file=file)
+        print(file=file)
         rows = '12345678'
         #backwards so that 0,0 (a1) is in the bottom right corner
         for r in range(SIZE-1, -1, -1):
             #left label
-            print(rows[r] + '|', end='')
+            print(rows[r] + '|', end='', file=file)
             #pieces
             for piece in self.board[r * SIZE : (r+1) * SIZE]:
-                print(pieceMap[piece] + '|', end='')
+                print(pieceMap[piece] + '|', end='', file=file)
             #right label
-            print(rows[r])
+            print(rows[r], file=file)
         #bottom label
-        print('  ', end='')
+        print('  ', end='', file=file)
         for c in cols:
-            print(c + ' ', end='')
-        print()
+            print(c + ' ', end='', file=file)
+        print(file=file)
 
     #applies the action to the board
     #adjusting self.turn as needed
@@ -133,15 +131,15 @@ class Checkers(Game):
             return None
         #forfeit is all 1s
         #first 2 are 1 -> all must be 1
-        if action[1] == 1 and action[2] == 1:
+        if action[0] == 1 and action[1] == 1:
             return 1 if self.turn == 2 else 2
 
         src = oneHotToNum(action[0 : SIZE*SIZE])
         dst = oneHotToNum(action[SIZE*SIZE : 2 * SIZE*SIZE])
         #player 2 submits flipped inputs
-        if self.turn == 2:
-            src = SIZE*SIZE-1 - src
-            dst = SIZE*SIZE-1 - dst
+        #if self.turn == 2:
+            #src = SIZE*SIZE-1 - src
+            #dst = SIZE*SIZE-1 - dst
 
         srcR = src // SIZE
         srcC = src % SIZE
@@ -180,17 +178,6 @@ class Checkers(Game):
             self.justCaptured = None
             #now it's the other player's turn
             self.turn = 1 if self.turn == 2 else 2
-
-        #<THIS IS NO LONGER USED>
-        #check for too many repeated states
-        #if we repeat too many times, end the game with a tie
-        """
-        state = tuple(self.board)
-        self.prevStateCount[state] += 1
-        if self.prevStateCount[state] >= 4:
-            return -1
-        """
-        #</THIS IS NO LONGER USED>
 
         #after so many turns, end the game in a tie
         self.turnCount -= 1
@@ -271,12 +258,12 @@ class Checkers(Game):
                 dsts = normDsts
                 actions = normActions
             for d in dsts:
-                if self.turn == 1:
-                    actions.append(numToOneHot(src, SIZE*SIZE) +
-                            numToOneHot(d, SIZE*SIZE))
-                else:
-                    actions.append(numToOneHot(SIZE*SIZE-1 - src, SIZE*SIZE) +
-                            numToOneHot(SIZE*SIZE-1 - d, SIZE*SIZE))
+                #if self.turn == 1:
+                actions.append(numToOneHot(src, SIZE*SIZE) +
+                        numToOneHot(d, SIZE*SIZE))
+                #else:
+                    #actions.append(numToOneHot(SIZE*SIZE-1 - src, SIZE*SIZE) +
+                            #numToOneHot(SIZE*SIZE-1 - d, SIZE*SIZE))
         #normal turn
         if self.justCaptured == None:
             if len(jumpActions) == 0:
@@ -306,9 +293,9 @@ class Checkers(Game):
         src = oneHotToNum(action[0 : SIZE*SIZE])
         dst = oneHotToNum(action[SIZE*SIZE : 2 * SIZE*SIZE])
         #if player is player 2, we need to un-flip the actions
-        if self.turn == 2:
-            src = SIZE*SIZE-1 - src
-            dst = SIZE*SIZE-1 - dst
+        #if self.turn == 2:
+            #src = SIZE*SIZE-1 - src
+            #dst = SIZE*SIZE-1 - dst
 
         srcR = src // SIZE
         srcC = src % SIZE

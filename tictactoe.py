@@ -1,5 +1,7 @@
 from game import Game
 
+import sys
+
 class TicTacToe(Game):
     input_shape = (36,)
     def __init__(self):
@@ -63,11 +65,11 @@ class TicTacToe(Game):
         #no one won, return None
         return None
 
-    def printBoard(self):
+    def printBoard(self, file=sys.stdout):
         for r in range(3):
             for c in range(3):
-                print(self.board[r * 3 + c], end="")
-            print()
+                print(self.board[r * 3 + c], end="", file=file)
+            print(file=file)
 
     def getActions(self):
         moves = [i for i in range(9) if self.board[i] == 0]

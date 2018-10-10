@@ -109,7 +109,8 @@ def testAgainstRandom(Game, model, n=100):
     ties = 0
     for i in range(n):
         game = Game()
-        modelTurn = 1 if random.random() > 0.5 else 2
+        #modelTurn = 1 if random.random() > 0.5 else 2
+        modelTurn = 1
         result = None
         while result == None:
             if game.turn == modelTurn:
@@ -259,8 +260,9 @@ def train(Game, name, num_models=3, model_width=256,
         """
         oldEpsilon = epsilon
         epsilon = 0
-        wins, losses, ties = testAgainstRandom(Game, models[0])
-        print(i, wins, losses, ties, sep=',', flush=True)
+        wins, losses, ties = testAgainstRandom(Game, models[0], n=1000)
+        #wins-losses is actual reward
+        print(i, wins, losses, ties, wins-losses, sep=',', flush=True)
         epsilon = oldEpsilon
         print(i, file=sys.stderr)
 
@@ -292,8 +294,10 @@ def train(Game, name, num_models=3, model_width=256,
             #this way of sampling means that every model plays every model once
             #before playing the same model again (assuming n*n divides epoch_size)
             n = len(models)
-            a = (j % (n*n)) // n
-            b = j % n
+            #a = (j % (n*n)) // n
+            a = 0
+            #b = j % n
+            b = n-1
             playGame(Game(), models[a], models[b], modelTuples[a], modelTuples[b])
         #train each model on the model tuples
         #see this for many of the ideas used
@@ -315,6 +319,18 @@ def train(Game, name, num_models=3, model_width=256,
                     #use target_model so we get a consistent evaluation of states
                     #use model for sort_model to reduce noise (double Q-learning)
                     val = discount * getStateValue(targetModel, nextState, sort_model=model) + reward
+                    #print out update process for fun
+                    #also to make sure everything looks right
+                    if j == 0 and k == 0:
+                        print('state', file=sys.stderr)
+                        state.printBoard(file=sys.stderr)
+                        print('action', file=sys.stderr)
+                        print(state.actionToString(action), file=sys.stderr)
+                        print('has value', file=sys.stderr)
+                        print(model.getValue(state.getData() + action), file=sys.stderr)
+                        print('will be updated to', file=sys.stderr)
+                        print('reward', reward, file=sys.stderr)
+                        print('next state', discount * getStateValue(targetModel, nextState, sort_model=model), file=sys.stderr)
                     model.addDataLabel(state.getData() + action, val)
                 model.batchedUpdate()
 
