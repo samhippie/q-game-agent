@@ -3,7 +3,12 @@ from game import Game
 import sys
 
 class TicTacToe(Game):
-    input_shape = (2 + 36,)
+
+    input_shape = (3 * 9 + 9,)
+
+    mcts_input_shape = (3 * 9,)
+    num_actions = 9
+
     def __init__(self):
         self.board = [0] * 9
         self.turn = 1
@@ -18,8 +23,7 @@ class TicTacToe(Game):
             2: [0,0,1] if self.turn == 1 else [0,1,0],
         }
         pieces = [d for ds in [pieceMap[i] for i in self.board] for d in ds]
-        player = [1,0] if self.turn == 1 else [0,1]
-        return player + pieces
+        return pieces
 
     #returns 1 or 2 if 1 or 2 won, else None
     #also bumps up turn
@@ -40,9 +44,6 @@ class TicTacToe(Game):
                 return self.board[a]
             return None
 
-        #tie
-        if 0 not in self.board:
-            return -1
 
         #diagonal
         if place in [0, 4, 8]:
@@ -64,6 +65,11 @@ class TicTacToe(Game):
         winner = checkPlaces(col, 3 + col, 6 + col)
         if winner:
             return winner
+
+        #tie, if no one has won and there are no spaces left
+        if 0 not in self.board:
+            return -1
+
         #no one won, return None
         return None
 
@@ -84,11 +90,18 @@ class TicTacToe(Game):
 
     #converts action to user-readable string
     def actionToString(self, action):
+        return str(self.enumAction(action) + 1)
+
+    def enumAction(self, action):
         move = 0
         for i in range(len(action)):
             if action[i] == 1:
                 move = i
                 break
-        return str(move + 1)
+        return move
 
+    def denumAction(self, n):
+        action = [0] * 9
+        action[n] = 1
+        return action
 
