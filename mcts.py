@@ -3,6 +3,7 @@
 #see https://arxiv.org/pdf/1712.01815.pdf and the first alpha go zero
 #paper for what this is based on
 
+import asyncio
 import copy
 import random
 import math
@@ -100,6 +101,8 @@ def montecarloSearchImpl(game, probTable, uct_c=1.414):
 
 #holds the MCTS 'tree' information
 #e.g. visit counts, Q values, history
+#uses MModel's async methods, so
+#some of the methods here are async
 class SearchState:
     def __init__(self, model, game):
         self.model = model
@@ -121,9 +124,9 @@ class SearchState:
 
     #probability vector of moves from this state
     #should we 0 out illegal actions and renorm?
-    def P(self, state):
+    async def P(self, state):
         if not state in self.probCache:
-            output = self.model.getValue(state)
+            output = await self.model.asyncGetValue(state)
             prob = output['prob']
             value = output['value']
             self.probCache[state] = prob
@@ -131,9 +134,9 @@ class SearchState:
         return self.probCache[state]
 
     #expected value of the state
-    def V(self, state):
+    async def V(self, state):
         if not state in self.valueCache:
-            self.P(state) # updates valueCache
+            await self.P(state) # updates valueCache
         return self.valueCache[state]
 
     #visit count of the state-action
@@ -151,7 +154,7 @@ class SearchState:
 
     #state is the state of the leaf node that was reached
     #the history up the that point is managed above
-    def addLeafVisit(self, leafState):
+    async def addLeafVisit(self, leafState):
         self.stateVisitCount[leafState] += 1
         #updated Q for each visit
         for state, action in self.pendingHistory:
@@ -159,24 +162,24 @@ class SearchState:
             #self.visitCount[(state, action)] = visits
             if visits == 1:
                 #Q value is average of 1
-                self.qTable[(state, action)] = self.V(leafState)
+                self.qTable[(state, action)] = await self.V(leafState)
             else:
                 #Q value is average of more than one
                 oldQ = self.qTable[(state, action)]
-                newQ = (oldQ * (visits - 1) + self.V(leafState)) / visits
+                newQ = (oldQ * (visits - 1) + (await self.V(leafState))) / visits
                 self.qTable[(state, action)] = newQ
         self.pendingHistory = []
 
     #part of upper bound on probability of picking state-action
     #needs a state, action, and the total list of actions from that state
-    def U(self, state, action, actions):
+    async def U(self, state, action, actions):
         #no idea what this constant is supposed to be
         #sqrt(2) is just a random guess
         uConst = 1.414
         total = 0
         for b in actions:
             total += self.N(state, tuple(b))
-        u = self.P(state)[self.game.enumAction(action)] * math.sqrt(total) / (1 + self.N(state, action))
+        u = (await self.P(state))[self.game.enumAction(action)] * math.sqrt(total) / (1 + self.N(state, action))
         return uConst * u
 
     #average expected value of the state-action
@@ -186,13 +189,12 @@ class SearchState:
 #generates prob table, which can be used as a policy for playing
 #temperature is high for exploration, low for explotation
 #(not sure what the actual value should be)
-def montecarloSearchNN(model, game, searchState, limit=100,
-        probTable=collections.defaultdict(lambda: (0,0)),
-        temperature = 1):
+async def montecarloSearchNN(model, game, searchState, limit=100,
+        temperature=1):
 
     #munch on the game for a while
     for i in range(limit):
-        montecarloSearchNNImpl(model, copy.deepcopy(game), searchState)
+        await montecarloSearchNNImpl(model, copy.deepcopy(game), searchState)
 
     #calculate the probabilities for the immediate actions
     actions = [tuple(a) for a in game.getActions()]
@@ -222,24 +224,22 @@ def montecarloSearchNN(model, game, searchState, limit=100,
         prob = count / total
         action = actions[i]
         probVector[game.enumAction(action)] = prob
-        probTable[(state, action)] = prob
 
     #return the probability vector and expected value
     #probVector will be used as a label,
     #while expected value is just from the network
     #so this is a little weird
-    return (probVector, searchState.V(state))
+    return (probVector, await searchState.V(state))
 
 #picks a path according to prob table and the model
 #runs until it hits a new leaf node
 #model is the MModel instance
 #search state has all the MCTS state information
 #returns True if a new player-action-state was found
-def montecarloSearchNNImpl(model, game, searchState):
+async def montecarloSearchNNImpl(model, game, searchState):
     result = None
     history = []
     while result == None:
-        randomPlayout = False
         actions = [tuple(a) for a in game.getActions()]
         player = game.turn
         state = tuple(game.getData())
@@ -250,14 +250,14 @@ def montecarloSearchNNImpl(model, game, searchState):
             bestAction = None
             bestQU = None
             for action in actions:
-                qu = searchState.Q(state, action) + searchState.U(state, action, actions)
+                qu = searchState.Q(state, action) + await searchState.U(state, action, actions)
                 if bestAction == None or qu > bestQU:
                     bestAction = action
                     bestQU = qu
             searchState.addVisit(state, bestAction)
             result = game.takeTurn(action)
         else:
-            searchState.addLeafVisit(state)
+            await searchState.addLeafVisit(state)
             #The paper isn't clear about how to handle leaf nodes
             #just return I guess
             return True
@@ -319,7 +319,7 @@ def playWithUser(Game, probTable=collections.defaultdict(lambda:(0,0))):
     print()
     print("winner:", result)
 
-def playTrainingGame(Game, model, verbose=False):
+async def playTrainingGame(Game, model, verbose=False):
     game = Game()
     searchState = SearchState(model, game)
     result = None
@@ -328,7 +328,7 @@ def playTrainingGame(Game, model, verbose=False):
     history = []
     while result == None:
         player = game.turn
-        (probVector, value) = montecarloSearchNN(model, game, searchState, limit=1000, temperature=1)
+        (probVector, value) = await montecarloSearchNN(model, game, searchState, limit=1000, temperature=1)
         actions = game.getActions()
         a = np.random.choice(len(probVector), p=probVector)
         if verbose:
@@ -354,6 +354,7 @@ def playTrainingGame(Game, model, verbose=False):
         print('result', result, file=sys.stderr)
 
     #game is over, give the data to the models
+    dataLabels = []
     for state, player, prob in history:
         if result == -1:
             reward = 0
@@ -361,9 +362,12 @@ def playTrainingGame(Game, model, verbose=False):
             reward = 1
         else:
             reward = -1
-        model.addDataLabel(state, prob, reward)
+        dataLabels.append((state, prob, reward))
 
-def playWithUserNN(Game, model):
+    await model.addDataLabels(dataLabels)
+
+
+async def playWithUserNN(Game, model):
     game = Game()
     userTurn = 1 if random.random() < 0.5 else 2
     print("you are player", userTurn)
@@ -391,10 +395,8 @@ def playWithUserNN(Game, model):
                     print('invalid input')
             result = game.takeTurn(actions[i])
         else:
-            (probVector, value) = montecarloSearchNN(
-                    model, game, searchState,
-                    limit=100,
-                    temperature=0.1)#exploitive
+            #temp is low so we pick more good moves
+            (probVector, value) = await montecarloSearchNN(model, game, searchState, limit=100, temperature=0.1)
             print('Expected reward:', value)
             #pick the action based on probability
             actions = (game.getActions())
@@ -411,23 +413,35 @@ def playWithUserNN(Game, model):
     print()
     print("winner:", result)
 
-def train(Game, epoch_size=1000, num_epochs=200):
-    #relatively high alpha for quick testing
+#epoch pool size is the number of training games run at once
+#epoch num pools is the number of consecutive pools
+#epoch size is pool size * num pools
+async def train(Game,
+        epoch_pool_size=100, epoch_num_pools=10, num_epochs=200):
     model = MModel(input_shape=Game.mcts_input_shape,
             num_actions=Game.num_actions,
             width=256,
             alpha=0.01)
+    #make the model wait for inputs to evaluate
+    asyncio.ensure_future(model.autoEval())
 
-    for i in range(num_epochs):
+    for i in range(epoch_num_pools):
         print('epoch', i)
-        for j in range(epoch_size):
-            playTrainingGame(Game, model, verbose = j == 0)
-
+        #set up all the games in the pool
+        pool = []
+        for j in range(epoch_pool_size):
+            pool.append(playTrainingGame(Game, model))
+        #wait for them all to finish
+        await asyncio.gather(*pool)
+        #update model
         model.batchedUpdate(epochs=10)
+        #play example verbose game
+        await playTrainingGame(Game, model, verbose=True)
 
-    playWithUserNN(Game, model)
-
-
+    await playWithUserNN(Game, model)
 
 if __name__ == '__main__':
-    train(TicTacToe, epoch_size=10, num_epochs=100)
+    main = train(TicTacToe, epoch_pool_size=100, epoch_num_pools=10, num_epochs=100)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main)
+    loop.close()
